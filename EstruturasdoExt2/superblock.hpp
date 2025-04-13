@@ -24,19 +24,21 @@ __u32	s_creator_os;		/* OS */
 __u32	s_rev_level;		/* Revision level */
 __u16	s_def_resuid;		/* Default uid for reserved blocks */
 __u16	s_def_resgid;		/* Default gid for reserved blocks */
-    		/*
-    366		 * These fields are for EXT2_DYNAMIC_REV superblocks only.
-    367		 *
-    368		 * Note: the difference between the compatible feature set and
-    369		 * the incompatible feature set is that if there is a bit set
-    370		 * in the incompatible feature set that the kernel doesn't
-    371		 * know about, it should refuse to mount the filesystem.
-    372		 * 
-    373		 * e2fsck's requirements are more strict; if it doesn't know
-    374		 * about a feature in either the compatible or incompatible
-    375		 * feature set, it must abort and not try to meddle with
-    376		 * things it doesn't understand...
-    377		 */
+    /*
+
+    * These fields are for EXT2_DYNAMIC_REV superblocks only.
+    *
+    * Note: the difference between the compatible feature set and
+    * the incompatible feature set is that if there is a bit set
+    * in the incompatible feature set that the kernel doesn't
+    * know about, it should refuse to mount the filesystem.
+    
+    
+    * e2fsck's requirements are more strict; if it doesn't know
+    * about a feature in either the compatible or incompatible
+    * feature set, it must abort and not try to meddle with
+    * things it doesn't understand...
+    */
 __u32	s_first_ino; 		/* First non-reserved inode */
 __u16   s_inode_size; 		/* size of inode structure */
 __u16	s_block_group_nr; 	/* block group # of this superblock */
