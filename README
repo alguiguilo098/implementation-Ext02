@@ -1,9 +1,21 @@
+# EXT2Shell
 
-#EXT2Shell
+## Descrição
 
-O projeto EXT2Shell é um programa feito em C/C++ que funciona como um terminal simples 
-para acessar e modificar o conteúdo de uma imagem de sistema de arquivos EXT2. 
-Quando você executa o programa com uma imagem .img, ele carrega os dados da imagem 
-na memória e permite que você navegue por ela e faça alterações, 
-como se estivesse usando um mini sistema de arquivos virtual.
-Esse shell começa no diretório raiz `/` da imagem e entende alguns comandos básicos, parecidos com os do terminal.
+**EXT2Shell** é um programa desenvolvido em C/C++ que simula um terminal simples para acessar e modificar o conteúdo de uma imagem de sistema de arquivos EXT2. 
+
+Ao executar o programa com uma imagem `.img`, os dados são carregados na memória, permitindo que o usuário navegue e interaja com o sistema de arquivos como se estivesse em um ambiente virtual. O shell inicia no diretório raiz `/` da imagem e reconhece uma série de comandos básicos semelhantes aos encontrados em terminais Unix.
+
+## Funcionalidades
+
+- Carregamento de imagens `.img` com sistema de arquivos EXT2
+- Navegação pelo sistema de arquivos (`cd`, `ls`)
+- Visualização de conteúdo de arquivos (`cat`)
+- Criação e remoção de arquivos e diretórios (`mkdir`, `rm`, `touch`)
+- Escrita e modificação de arquivos
+- Simulação de permissões básicas (dependendo da implementação)
+
+## Exemplo de Uso
+
+```bash
+./ext2shell imagem.ext2
