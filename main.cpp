@@ -2,8 +2,13 @@
 #include<iostream>
 int main(int argc, char const *argv[])
 {
-    Shell* shell=new Shell();
-    shell->info();
+    try{
+        Shell* shell=new Shell();
+        shell->run();
+    }catch(const std::exception& e){
+        std::cerr << e.what() << '\n';
+    }
+    
 
     return 0;
 }
