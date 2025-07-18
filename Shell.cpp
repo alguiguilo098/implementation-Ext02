@@ -31,8 +31,6 @@ Shell::Shell(string path)
     int block_size = 1024 << this->sb.s_log_block_size;
     // move point file to group descriptor
     fread(&this->gd, sizeof(ext2_group_desc), 1, fd);
-
-    this->map_inodes=std::map<int,ext
 }
 
 void Shell::info()
@@ -63,11 +61,22 @@ void Shell::clear()
 
 void Shell::list_directory(ext2_inode *inode)
 {
+    std::vector<ext2_dir_entry_2> entries = get_entry_directory(inode);
     if ((inode->i_mode & 0xF000) == 0x4000) // Verifica se é diretório
     {
-        std::cout << "Directory contents:" << std::endl;
-
-        get_entry_directory(inode);
+        int i=0;
+        for (const auto &entry : entries)
+        {
+            if (i<2)
+            {
+                std::cout << "Inode:" << entry.inode << "\t\t" << "Name:" << entry.name << "\t\t\t" << "Size:" << entry.rec_len << std::endl; 
+                i++;
+                continue;
+            }
+            
+            // Print the entry name
+            std::cout << "Inode:" << entry.inode << "\t" << "Name:" << entry.name << "\t\t" << "Size:" << entry.rec_len  << std::endl; 
+        } 
     }
     else
     {
@@ -75,8 +84,9 @@ void Shell::list_directory(ext2_inode *inode)
     }
 }
 
-void Shell::get_entry_directory(ext2_inode *inode)
+std::vector<ext2_dir_entry_2> Shell::get_entry_directory(ext2_inode *inode)
 {
+    std::vector<ext2_dir_entry_2> entries;
     for (int i = 0; i < 12; i++) // usa só os blocos diretos
     {
         if (inode->i_block[i] == 0)
@@ -98,22 +108,12 @@ void Shell::get_entry_directory(ext2_inode *inode)
             memcpy(name, entry->name, entry->name_len);
             name[entry->name_len] = '\0';
 
-            std::cout << "Inode: " << entry->inode << ", Name: " << name << std::endl;
+            entries.push_back(*entry);
 
             offset += entry->rec_len;
         }
     }
-}
-
-void Shell::change_directory(ext2_inode *inode, std::string &path)
-{
-}
-
-void Shell::change_directory(ext2_inode *inode, std::string*path){
-    // Change directory implementation
-    if((inode->i_mode & 0xF000)== 0x4000){
-        
-    }
+    return entries;
 }
 
 void Shell::read_inode(FILE *fd, int num_inode, ext2_inode *inode)
@@ -167,6 +167,12 @@ void Shell::run()
             // info superblock
             this->info();
         }
+        if (args[0] == "pwd")
+        {
+            // print current working directory
+            std::cout << "Current directory" << path << std::endl;
+        }
+
         else if (args[0] == "exit")
         {
             // exit shell
