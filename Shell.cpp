@@ -15,6 +15,7 @@ using namespace std;
 #define BASE_OFFSET 1024 // Define base offset for superblock
 
 #define BLOCK_OFFSET(block) (BASE_OFFSET + (block - 1) * BLOCK_SIZE)
+
 Shell::Shell(string path)
 {
     fd = fopen(path.c_str(), "rb");
@@ -137,6 +138,12 @@ std::vector<ext2_dir_entry_2> Shell::get_entry_directory(ext2_inode *inode)
         }
     }
 
+    if(inode->i_block[12] != 0)
+    {
+        // Handle single indirect block
+        read_block_dir_indirect(inode->i_block[12], fd);
+
+    }
     return entries;
 }
 
@@ -268,6 +275,19 @@ void Shell::read_block_13(uint32_t block_num, int level, FILE *fd)
     }
 }
 
+
+
+
+void Shell::touch_file(ext2_inode *inode, string filename)
+{
+    uint32_t bitmap=gd[0].bg_inode_bitmap;
+
+}
+
+void Shell::mkdir_file(ext2_inode *inode, string dirname)
+{
+}
+
 void Shell::run()
 {
     // Run Shell
@@ -310,11 +330,15 @@ void Shell::run()
         }
         else if (args[0] == "cd" && args[1] != " ")
         {
+            // change directory
             uint32_t number_inode = this->map_inode[args[1]];
             ext2_inode inode_dir;
+            // Read the inode of the directory
             this->read_inode(this->fd, number_inode, &inode_dir);
+            // List the directory to update entries
             this->list_directory(&inode_dir);
-            path += args[1] + "/";
+            change_dir(args, path);
+
             this->read_inode(this->fd, number_inode, &inode);
         }
         else if (args[0] == "cat" && args[1] != " ")
@@ -336,6 +360,26 @@ void Shell::run()
         else
         {
             std::cout << "Comando inválido" << std::endl;
+        }
+    }
+}
+
+void Shell::change_dir(std::string *args, std::string &path)
+{
+    if (args[1] != "." && args[1] != "..")
+    {
+        path += args[1];
+    }
+    if (args[1] == "..")
+    {
+        size_t pos = path.find_last_of('/');
+        if (pos != std::string::npos)
+        {
+            path = path.substr(0, pos);
+            if (path.empty())
+            {
+                path = "/";
+            }
         }
     }
 }

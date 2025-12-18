@@ -26,8 +26,13 @@ class Shell{
         void split(std::string str, char delimiter, std::string* result, int count);
         void cat(ext2_inode *inode, int num_inode);
         void read_block_13(uint32_t block_num, int level, FILE* fd); 
+        void read_block_dir_indirect(uint32_t block_num, FILE* fd);
+        void touch_file(ext2_inode* inode, string filename);
+        void mkdir_file(ext2_inode* inode, string dirname);
+
     public:
         Shell(string path="./myext2image.img");
 
         void run();
+        void change_dir(std::string *args, std::string &path);
 };
