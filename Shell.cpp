@@ -4,33 +4,47 @@
 // This class provides methods to interact with the ext2 file system
 
 #include "Shell.hpp"
-#include <iostream>
-#include <string>
-#include <cstring>
+#include <iostream> // For input/output operations
+#include <string>   // For string manipulations
+#include <cstring>  // For C-style string functions
 #include <ctime>
 #include <cstdio>
-
+#include <sys/stat.h>
 using namespace std;
-#define BLOCK_SIZE 1024
+#define BLOCK_SIZE 1024  // Define block size
+#define BASE_OFFSET 1024 // Define base offset for superblock
 
+#define BLOCK_OFFSET(block) (BASE_OFFSET + (block - 1) * BLOCK_SIZE)
 Shell::Shell(string path)
 {
-
-    // Constructor implementation
-    this->fd = fopen(path.c_str(), "r");
-    if (fd == NULL)
+    fd = fopen(path.c_str(), "rb");
+    if (!fd)
     {
-        std::cout << "Erro ao abrir o arquivo" << std::endl;
+        perror("fopen");
         exit(1);
-    };
+    }
 
-    // move point file beging superblock
+    // superblock
     fseek(fd, 1024, SEEK_SET);
-    fread(&this->sb, sizeof(ext2_super_block), 1, fd);
+    fread(&sb, sizeof(ext2_super_block), 1, fd);
 
-    int block_size = 1024 << this->sb.s_log_block_size;
-    // move point file to group descriptor
-    fread(&this->gd, sizeof(ext2_group_desc), 1, fd);
+    // group descriptor
+    int block_size = 1024 << sb.s_log_block_size;
+
+    // Calculate number of block groups
+    uint32_t groups =
+        (sb.s_blocks_count + sb.s_blocks_per_group - 1) / sb.s_blocks_per_group;
+
+    // Allocate memory for group descriptors
+    gd = new ext2_group_desc[groups];
+
+    // Calculate offset for group descriptors
+    off_t gd_offset =
+        (block_size == 1024) ? 2048 : block_size;
+
+    // Read group descriptors
+    fseek(fd, gd_offset, SEEK_SET);
+    fread(gd, sizeof(ext2_group_desc), groups, fd);
 }
 
 void Shell::info()
@@ -61,25 +75,29 @@ void Shell::clear()
 
 void Shell::list_directory(ext2_inode *inode)
 {
+    // List directory method implementation
     std::vector<ext2_dir_entry_2> entries = get_entry_directory(inode);
+
     if ((inode->i_mode & 0xF000) == 0x4000) // Verifica se é diretório
     {
-        int i=0;
+        int i = 0;
         for (const auto &entry : entries)
         {
-            if (i<2)
+            if (i < 2)
             {
-                std::cout << "Inode:" << entry.inode << "\t\t" << "Name:" << entry.name << "\t\t\t" << "Size:" << entry.rec_len << std::endl; 
+                // Skip "." and ".." entries
+                std::cout << "Inode:" << entry.inode << "\t\t" << "Name:" << entry.name << "\t\t\t" << "Size:" << entry.rec_len << std::endl;
                 i++;
                 continue;
             }
-            
+
             // Print the entry name
-            std::cout << "Inode:" << entry.inode << "\t" << "Name:" << entry.name << "\t\t" << "Size:" << entry.rec_len  << std::endl; 
-        } 
+            std::cout << "Inode:" << entry.inode << "\t" << "Name:" << entry.name << "\t\t" << "Size:" << entry.rec_len << std::endl;
+        }
     }
     else
     {
+        // Not a directory
         std::cout << "Inode is not a directory." << std::endl;
     }
 }
@@ -92,13 +110,16 @@ std::vector<ext2_dir_entry_2> Shell::get_entry_directory(ext2_inode *inode)
         if (inode->i_block[i] == 0)
             continue;
 
+        // Read directory block
         uint8_t block[BLOCK_SIZE];
         fseek(fd, inode->i_block[i] * BLOCK_SIZE, SEEK_SET);
         fread(block, 1, BLOCK_SIZE, fd);
 
+        // Parse directory entries
         uint32_t offset = 0;
         while (offset < BLOCK_SIZE)
         {
+            // Pega a entrada do diretório
             ext2_dir_entry_2 *entry = (ext2_dir_entry_2 *)(block + offset);
             if (entry->inode == 0 || entry->rec_len == 0)
                 break;
@@ -108,21 +129,57 @@ std::vector<ext2_dir_entry_2> Shell::get_entry_directory(ext2_inode *inode)
             memcpy(name, entry->name, entry->name_len);
             name[entry->name_len] = '\0';
 
+            // Adiciona a entrada ao vetor
             entries.push_back(*entry);
+            this->map_inode[name] = entry->inode;
 
             offset += entry->rec_len;
         }
     }
+
     return entries;
 }
 
-void Shell::read_inode(FILE *fd, int num_inode, ext2_inode *inode)
+void Shell::read_inode(FILE *fd, uint32_t num_inode, ext2_inode *inode)
 {
+    if (num_inode == 0 || num_inode > sb.s_inodes_count)
+    {
+        printf("Invalid inode %u\n", num_inode);
+        return;
+    }
 
-    int inode_size = sb.s_inode_size;
-    int offset = BLOCK_SIZE * gd.bg_inode_table + (num_inode - 1) * inode_size;
-    fseek(fd, offset, SEEK_SET);
-    fread(inode, sizeof(ext2_inode), 1, fd);
+    // Calculate group and index of the inode
+    uint32_t group =
+        (num_inode - 1) / sb.s_inodes_per_group;
+
+    // Calculate index within the group
+    uint32_t index =
+        (num_inode - 1) % sb.s_inodes_per_group;
+
+    // Get inode size
+    size_t inode_size = sb.s_inode_size;
+
+    // Calculate offset of the inode
+    off_t offset =
+        BLOCK_OFFSET(gd[group].bg_inode_table) +
+        index * inode_size;
+
+    if (fseek(fd, offset, SEEK_SET) != 0)
+    {
+        perror("fseek inode");
+        return;
+    }
+    // Read inode data
+    uint8_t buf[inode_size];
+
+    if (fread(buf, inode_size, 1, fd) != 1)
+    {
+        perror("fread inode");
+        return;
+    }
+
+    // Copy data to inode structure
+    memcpy(inode, buf, sizeof(ext2_inode));
 }
 
 void Shell::iprintf(ext2_inode *inode, int num_inode)
@@ -146,20 +203,88 @@ void Shell::iprintf(ext2_inode *inode, int num_inode)
     std::cout << "File flags: " << inode->i_flags << std::endl;
     std::cout << "Generation number: " << inode->i_generation << std::endl;
 };
+void Shell::cat(ext2_inode *inode, int num_inode)
+{
+    // Print file content
+    if (S_ISREG(inode->i_mode))
+    {
+        for (int i = 0; i < EXT2_N_BLOCKS; i++)
+        {
+            if (inode->i_block[i] == 0)
+                continue;
+            uint8_t block[BLOCK_SIZE];
+
+            fseek(fd, inode->i_block[i] * BLOCK_SIZE, SEEK_SET);
+            fread(block, 1, BLOCK_SIZE, fd);
+
+            std::cout.write((char *)block, BLOCK_SIZE);
+        }
+        // Handle indirect blocks
+        if (inode->i_block[12] != 0)
+        {
+            // Single indirect
+            read_block_13(inode->i_block[12], 1, fd);
+        }
+        if (inode->i_block[13] != 0)
+        {
+            // Double indirect
+            read_block_13(inode->i_block[13], 2, fd);
+        }
+        if (inode->i_block[14] != 0)
+        {
+            // Triple indirect
+            read_block_13(inode->i_block[14], 3, fd);
+        }
+    }
+}
+
+void Shell::read_block_13(uint32_t block_num, int level, FILE *fd)
+{
+    if (level < 1 || level > 3)
+        return;
+
+    uint32_t pointers_per_block = BLOCK_SIZE / sizeof(uint32_t); // Number of block pointers per block
+    uint32_t block_pointers[pointers_per_block];                 // Array to hold block pointers
+
+    fseek(fd, block_num * BLOCK_SIZE, SEEK_SET);                     // Seek to the block
+    fread(block_pointers, sizeof(uint32_t), pointers_per_block, fd); // Read block pointers
+
+    for (uint32_t i = 0; i < pointers_per_block; i++)
+    {
+        if (block_pointers[i] == 0)
+            continue; // Skip if block pointer is 0
+
+        if (level == 1)
+        {
+            uint8_t block[BLOCK_SIZE];                           // Buffer to hold block data
+            fseek(fd, block_pointers[i] * BLOCK_SIZE, SEEK_SET); // Seek to the block
+            fread(block, 1, BLOCK_SIZE, fd);                     // Read block data
+            std::cout.write((char *)block, BLOCK_SIZE);          // Print block data
+        }
+        else
+        {
+            read_block_13(block_pointers[i], level - 1, fd); // Recursive call for next level
+        }
+    }
+}
 
 void Shell::run()
 {
     // Run Shell
     std::string path = "/";
-    std::string command;
+    std::string imagename = "myext2image.img";
+    std::string command; // Command input
     std::string *args = new std::string[10];
-    ext2_inode inode;
+    ext2_inode inode; // Current inode
+
     this->read_inode(this->fd, 2, &inode); // Read root inode
-    int number_inode;
+
+    int number_inode; // Number of inode
     while (true)
     {
 
-        std::cout << "[" << path << "]$>";
+        // Shell prompt
+        std::cout << "[" << imagename << path << "]$>";
         std::getline(std::cin, command);
         this->split(command, ' ', args, 10);
         if (args[0] == "info")
@@ -170,7 +295,7 @@ void Shell::run()
         if (args[0] == "pwd")
         {
             // print current working directory
-            std::cout << "Current directory" << path << std::endl;
+            std::cout << path << std::endl;
         }
 
         else if (args[0] == "exit")
@@ -182,6 +307,22 @@ void Shell::run()
         {
             // clear shell
             this->clear();
+        }
+        else if (args[0] == "cd" && args[1] != " ")
+        {
+            uint32_t number_inode = this->map_inode[args[1]];
+            ext2_inode inode_dir;
+            this->read_inode(this->fd, number_inode, &inode_dir);
+            this->list_directory(&inode_dir);
+            path += args[1] + "/";
+            this->read_inode(this->fd, number_inode, &inode);
+        }
+        else if (args[0] == "cat" && args[1] != " ")
+        {
+            uint32_t number_inode = this->map_inode[args[1]];
+            ext2_inode inode_file;
+            this->read_inode(this->fd, number_inode, &inode_file);
+            this->cat(&inode_file, number_inode);
         }
         else if (args[0] == "iprintf")
         {

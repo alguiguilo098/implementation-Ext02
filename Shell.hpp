@@ -5,24 +5,29 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <map>
 
 using namespace std;
+
 class Shell{
     
     private:
         std::vector<ext2_dir_entry_2> entries;
+        std::map<string,uint32_t> map_inode= std::map<string,uint32_t>();
         ext2_super_block  sb;
-        ext2_group_desc gd;
+        ext2_group_desc* gd;
         FILE* fd;
         void info();
         void clear();
         void list_directory(ext2_inode *inode);
         std::vector<ext2_dir_entry_2> get_entry_directory(ext2_inode *inode);
-        void read_inode(FILE* fd,int no_inode,ext2_inode* inode);
+        void read_inode(FILE* fd,uint32_t num_inode,ext2_inode* inode);
         void iprintf(ext2_inode* inode,int num_inode);
         void split(std::string str, char delimiter, std::string* result, int count);
+        void cat(ext2_inode *inode, int num_inode);
+        void read_block_13(uint32_t block_num, int level, FILE* fd); 
     public:
         Shell(string path="./myext2image.img");
-        ~Shell();
+
         void run();
 };
